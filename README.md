@@ -5,8 +5,12 @@ Python 3.10 이상에서 사용합니다.
 ```bash
 git clone https://github.com/choimagon/wca.git
 cd wca
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install .
 ```
+
+기존 설치를 업데이트하려면 저장소에서 `git pull` 후 `python -m pip install --upgrade .`를 실행합니다.
 
 ## 파일과 이름 가져오기
 

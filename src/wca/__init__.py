@@ -3,7 +3,7 @@
 from pathlib import Path
 from .client import WCA, WCAAPIError, WCAConfigError, WCAConflictError, WCAError, WCANotFoundError
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = ["WCA", "configure", "list", "frist", "first", "spend", "WCAError", "WCAAPIError", "WCAConfigError", "WCAConflictError", "WCANotFoundError"]
 _default: WCA | None = None
 

@@ -1,12 +1,15 @@
 import base64
 from io import BytesIO
 import json
+import socket
+import ssl
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import HTTPSHandler
 
 import wca
 from wca import WCA, WCAAPIError, WCAConfigError, WCAConflictError, WCANotFoundError
@@ -251,6 +254,33 @@ class WCATests(unittest.TestCase):
                 client, _ = configured(response)
                 with self.assertRaises(WCAAPIError):
                     client.list()
+
+    def test_empty_system_trust_store_gets_verified_ca_bundle(self):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        self.assertEqual(context.cert_store_stats()["x509_ca"], 0)
+        with patch("wca.client.ssl.create_default_context", return_value=context):
+            client = WCA(secret_key=KEY)
+        self.assertGreater(context.cert_store_stats()["x509_ca"], 0)
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        handlers = [handler for handler in client._transport.opener.handlers if isinstance(handler, HTTPSHandler)]
+        self.assertEqual(len(handlers), 1)
+        self.assertIs(handlers[0]._context, context)
+
+    def test_network_errors_are_classified_without_exposing_credentials(self):
+        errors = [
+            (URLError(ssl.SSLCertVerificationError(1, KEY)), "TLS_CERTIFICATE_ERROR"),
+            (URLError(socket.gaierror(-2, KEY)), "DNS_ERROR"),
+            (URLError(TimeoutError(KEY)), "TIMEOUT"),
+            (URLError(ConnectionRefusedError(KEY)), "CONNECTION_ERROR"),
+        ]
+        for error, expected in errors:
+            with self.subTest(code=expected):
+                client, _ = configured(error)
+                with self.assertRaises(WCAAPIError) as caught:
+                    client.list()
+                self.assertEqual(caught.exception.code, expected)
+                self.assertNotIn(KEY, str(caught.exception))
 
     def test_module_api_uses_environment_and_has_no_import_side_effects(self):
         old = wca._default

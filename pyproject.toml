@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "WCA"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python admin library for IMEL contest submissions"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["certifi>=2024.2.2"]
 
 [project.urls]
 Repository = "https://github.com/choimagon/wca"

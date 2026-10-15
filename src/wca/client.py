@@ -6,13 +6,17 @@ import base64
 import json
 import math
 import os
+import socket
+import ssl
 from pathlib import Path
 import tempfile
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 from uuid import UUID
+
+import certifi
 
 DEFAULT_URL = "https://ufzrasrrhsmkfxribyqp.supabase.co"
 _FIELDS = "id,team_name,file_name,file_size,created_at,result"
@@ -116,13 +120,15 @@ class _Transport:
         self.url = url
         self.key = key
         self.timeout = timeout
-        self.opener = build_opener(_NoRedirect())
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=certifi.where())
+        self.opener = build_opener(_NoRedirect(), HTTPSHandler(context=context))
 
     def request(self, method: str, path: str, *, params=None, body=None, binary=False):
         url = self.url + path
         if params:
             url += "?" + urlencode(params)
-        headers = {"apikey": self.key, "User-Agent": "WCA/0.2.0", "Accept": "application/octet-stream" if binary else "application/json"}
+        headers = {"apikey": self.key, "User-Agent": "WCA/0.2.1", "Accept": "application/octet-stream" if binary else "application/json"}
         if not self.key.startswith("sb_secret_"):
             headers["Authorization"] = "Bearer " + self.key
         data = None
@@ -144,8 +150,15 @@ class _Transport:
             message = str(details.get("message") or details.get("error") or "Supabase 요청에 실패했습니다.")
             message = message.replace(self.key, "[redacted]")[:500]
             raise WCAAPIError(message, status=error.code, code=details.get("code")) from None
-        except (URLError, TimeoutError, OSError):
-            raise WCAAPIError("Supabase에 연결할 수 없습니다. 주소, 네트워크, timeout을 확인해주세요.") from None
+        except (URLError, TimeoutError, OSError) as error:
+            reason = error.reason if isinstance(error, URLError) else error
+            if isinstance(reason, ssl.SSLCertVerificationError):
+                raise WCAAPIError("HTTPS 인증서를 확인할 수 없습니다. WCA와 certifi를 업데이트하고 인증서 설정을 확인해주세요.", code="TLS_CERTIFICATE_ERROR") from None
+            if isinstance(reason, socket.gaierror):
+                raise WCAAPIError("Supabase 주소를 찾을 수 없습니다. 프로젝트 주소와 인터넷 연결을 확인해주세요.", code="DNS_ERROR") from None
+            if isinstance(reason, TimeoutError):
+                raise WCAAPIError("Supabase 연결 시간이 초과됐습니다. 인터넷 연결 또는 timeout 설정을 확인해주세요.", code="TIMEOUT") from None
+            raise WCAAPIError("Supabase에 연결할 수 없습니다. 인터넷 연결과 프록시 설정을 확인해주세요.", code="CONNECTION_ERROR") from None
         if len(raw) > limit:
             raise WCAAPIError("서버 응답이 허용된 크기를 초과했습니다.")
         if binary:
