@@ -3,7 +3,7 @@
 from pathlib import Path
 from .client import WCA, WCAAPIError, WCAConfigError, WCAConflictError, WCAError, WCANotFoundError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["WCA", "configure", "list", "frist", "first", "spend", "WCAError", "WCAAPIError", "WCAConfigError", "WCAConflictError", "WCANotFoundError"]
 _default: WCA | None = None
 
@@ -15,10 +15,12 @@ def configure(url: str | None = None, secret_key: str | None = None, *, download
     return _default
 
 
-def _client() -> WCA:
+def _client(secret_key: str | None = None) -> WCA:
     global _default
     if _default is None:
-        _default = WCA()
+        _default = WCA(secret_key=secret_key)
+    elif secret_key is not None:
+        _default._set_secret_key(secret_key)
     return _default
 
 
@@ -30,8 +32,9 @@ def frist(download_dir: str | Path | None = None):
     return _client().frist(download_dir)
 
 
-def first(download_dir: str | Path | None = None):
-    return _client().first(download_dir)
+def first(secret_key: str | None = None, *, download_dir: str | Path | None = None):
+    """Download with an optional admin key; reuse that key for later module calls."""
+    return _client(secret_key).first(download_dir=download_dir)
 
 
 def spend(name: str, value: str | int | float, *, submission_id: str | None = None):

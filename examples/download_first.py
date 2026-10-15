@@ -1,13 +1,18 @@
 """Download the oldest pending submission using WCA's first() API."""
 
 import sys
+from getpass import getpass
 
 import wca
 
 
 def main() -> int:
     try:
-        submission = wca.first()
+        secret_key = getpass("Supabase 관리자 키 (환경변수를 쓰려면 Enter): ").strip()
+        submission = wca.first(secret_key or None)
+    except (EOFError, KeyboardInterrupt):
+        print("\n입력을 취소했습니다.", file=sys.stderr)
+        return 130
     except (wca.WCAError, OSError) as error:
         print(f"가져오기 실패: {error}", file=sys.stderr)
         return 1

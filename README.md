@@ -5,10 +5,10 @@ IMEL 개인 대회 제출 데이터를 조회하고, 결과가 `X`인 Python 파
 | 명령어 | 동작 | 반환값 |
 | --- | --- | --- |
 | `wca.list()` | 현재 제출 전체를 업로드가 오래된 순서로 조회 | 메타데이터 딕셔너리 목록 |
-| `wca.frist()` | 결과가 `X`인 제출 중 가장 오래된 `.py` 파일 다운로드 | 이름·파일 정보·다운로드 경로 딕셔너리, 없으면 `None` |
+| `wca.first(키)` 또는 `wca.frist()` | 결과가 `X`인 제출 중 가장 오래된 `.py` 파일 다운로드 | 이름·파일 정보·다운로드 경로 딕셔너리, 없으면 `None` |
 | `wca.spend(이름, 값)` | 해당 이름의 가장 오래된 미처리 제출 1건에 결과 저장 | 갱신한 제출 딕셔너리 |
 
-요청한 `frist` 철자를 그대로 지원합니다. 같은 동작의 `wca.first()`도 사용할 수 있습니다.
+요청한 `frist()`도 계속 지원합니다. `first(키)`로 관리자 키를 직접 전달하거나, 기존처럼 환경변수를 설정한 뒤 `first()`로 호출할 수 있습니다.
 
 ## 설치
 
@@ -36,6 +36,25 @@ python -m pip install .
 
 설치 후 다른 폴더의 Python 프로그램에서도 `import wca`로 사용합니다. 개발하면서 소스를 바로 반영하려면 `python -m pip install -e .`로 설치합니다.
 
+## 키를 직접 넣어 다운로드하기
+
+환경변수를 설정하지 않아도 다음처럼 사용할 수 있습니다. 입력한 관리자 키는 화면에 표시되지 않습니다.
+
+```python
+from getpass import getpass
+import wca
+
+key = getpass("Supabase 관리자 키: ")
+submission = wca.first(key)
+if submission is not None:
+    print("이름:", submission["name"])
+    print("다운로드 경로:", submission["path"])
+```
+
+`first(key)`로 전달한 키는 현재 Python 프로세스의 WCA 클라이언트에 적용됩니다. 이후 `wca.list()`나 `wca.spend(...)`도 같은 키를 사용하며, 파일이나 환경변수에 키를 저장하지 않습니다. 이미 `configure()`로 정한 URL·저장 폴더·timeout은 유지됩니다.
+
+저장 폴더를 바꾸려면 `wca.first(key, download_dir="received")`로 호출합니다. `first()`의 첫 번째 인자는 키이며, 폴더는 `download_dir=`로 지정합니다.
+
 ## Supabase 설정
 
 현재 프로젝트 URL은 기본값으로 연결되어 있습니다:
@@ -44,7 +63,7 @@ python -m pip install .
 https://ufzrasrrhsmkfxribyqp.supabase.co
 ```
 
-파일 원문 다운로드와 결과 수정에는 **관리자 비밀 키**가 필요합니다. Supabase 프로젝트의 **Settings → API Keys → Secret keys**에서 `sb_secret_...` 키를 가져와 관리자 PC나 서버의 환경변수로 설정하세요. 기존 `service_role` 키도 지원합니다. 웹에서 쓰는 `sb_publishable_...` 공개 키는 사용할 수 없습니다. 비밀 키는 `.env` 등 로컬에만 보관하며, 웹사이트·GitHub·채팅에 넣지 않습니다. [Supabase API 키 안내](https://supabase.com/docs/guides/getting-started/api-keys)
+파일 원문 다운로드와 결과 수정에는 **관리자 비밀 키**가 필요합니다. Supabase 프로젝트의 **Settings → API Keys → Secret keys**에서 `sb_secret_...` 키를 가져와 `first(키)`에 전달하거나 관리자 PC·서버의 환경변수로 설정하세요. 기존 `service_role` 키도 지원합니다. 웹에서 쓰는 `sb_publishable_...` 공개 키는 사용할 수 없습니다. 비밀 키는 `.env` 등 로컬에만 보관하며, 웹사이트·GitHub·채팅에 넣지 않습니다. [Supabase API 키 안내](https://supabase.com/docs/guides/getting-started/api-keys)
 
 macOS / Linux에서는 다음과 같이 설정합니다:
 
@@ -69,7 +88,7 @@ $env:WCA_DOWNLOAD_DIR = "downloads"
 | 환경변수 | 기본값 / 용도 |
 | --- | --- |
 | `WCA_SUPABASE_URL` | 위 프로젝트 URL |
-| `WCA_SUPABASE_SECRET_KEY` | 필수 관리자 키 |
+| `WCA_SUPABASE_SECRET_KEY` | `first(키)`에 키를 전달하지 않을 때 사용하는 관리자 키 |
 | `WCA_DOWNLOAD_DIR` | `downloads`, 파일 저장 폴더 |
 
 일반적인 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY` 환경변수도 지원합니다. `WCA_` 변수가 우선합니다.
@@ -100,13 +119,13 @@ else:
     print("저장된 결과:", updated["result"])
 ```
 
-`first()`로 가장 오래된 미처리 파일을 가져오고 이름·다운로드 경로를 출력하려면 환경변수를 설정한 뒤 실행하세요:
+`first(키)`로 가장 오래된 미처리 파일을 가져오고 이름·다운로드 경로를 출력하려면 다음 예제를 실행하세요:
 
 ```bash
 python examples/download_first.py
 ```
 
-이 예제는 `wca.first()`만 호출하고 결과값은 수정하지 않습니다. 미처리 제출이 없으면 안내 문구를 출력하며, 연결·설정·파일 저장 오류는 종료 코드 1로 알립니다.
+실행하면 관리자 키를 입력받습니다. Enter만 누르면 기존 환경변수를 사용합니다. 이 예제는 `wca.first(키)`로 다운로드하고 결과값은 수정하지 않습니다. 미처리 제출이 없으면 안내 문구를 출력하며, 연결·설정·파일 저장 오류는 종료 코드 1로 알립니다.
 
 전체 목록 조회도 포함한 기존 예제는 `python examples/basic.py`로 실행할 수 있습니다.
 
@@ -130,7 +149,7 @@ python examples/download_first.py
 
 `name`과 `team_name`은 같은 제출자 이름입니다. 기존 데이터베이스 컬럼명이 `team_name`이므로 호환성을 위해 두 이름을 반환합니다. 시각은 서버의 UTC 값이며 웹에서는 한국 시간으로 표시합니다. 목록은 페이지를 이어서 가져오므로 500건을 넘어도 조회할 수 있습니다.
 
-### `wca.frist(download_dir=None)`
+### `wca.first(secret_key=None, *, download_dir=None)` / `wca.frist(download_dir=None)`
 
 결과가 정확히 `X`인 가장 오래된 제출을 다운로드합니다. 저장 경로는 기본적으로 `downloads/<제출 ID>.py`입니다. 원래 파일 이름이 같아도 서로 다른 제출은 다른 경로에 저장됩니다. 파일 내용은 실행하거나 변환하지 않고 원본 바이트로 저장합니다.
 
@@ -177,7 +196,7 @@ except WCAError as error:
     print("관리자 작업 실패:", error)
 ```
 
-`wca.configure(download_dir="received", timeout=60)`으로 모듈 전체 설정을 바꿀 수도 있습니다. URL과 키를 직접 인자로 전달할 때는 `WCA(url=..., secret_key=...)` 또는 `wca.configure(url=..., secret_key=...)`를 사용합니다. 코드에 키를 직접 적는 대신 환경변수에서 읽으세요.
+`wca.configure(download_dir="received", timeout=60)`으로 모듈 전체 설정을 바꿀 수도 있습니다. URL과 키를 직접 인자로 전달할 때는 `WCA(url=..., secret_key=...)` 또는 `wca.configure(url=..., secret_key=...)`를 사용합니다. 키는 `getpass()`로 입력받거나 환경변수에서 읽으세요.
 
 설정 오류는 `WCAConfigError`, 서버·다운로드 오류는 `WCAAPIError`입니다. `WCAAPIError.status`와 `.code`로 서버 오류 종류를 확인할 수 있습니다. 파일 저장 폴더의 권한 등 로컬 파일 시스템 오류는 `OSError`로 전달됩니다.
 

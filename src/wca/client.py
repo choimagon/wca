@@ -122,7 +122,7 @@ class _Transport:
         url = self.url + path
         if params:
             url += "?" + urlencode(params)
-        headers = {"apikey": self.key, "User-Agent": "WCA/0.1.0", "Accept": "application/octet-stream" if binary else "application/json"}
+        headers = {"apikey": self.key, "User-Agent": "WCA/0.2.0", "Accept": "application/octet-stream" if binary else "application/json"}
         if not self.key.startswith("sb_secret_"):
             headers["Authorization"] = "Bearer " + self.key
         data = None
@@ -166,12 +166,16 @@ class WCA:
             raise WCAConfigError("Supabase 프로젝트의 HTTPS 주소를 입력해주세요.")
         if not parsed.hostname.endswith(".supabase.co"):
             raise WCAConfigError("관리자 키는 Supabase 프로젝트의 .supabase.co 주소에만 전송합니다.")
-        secret_key = secret_key or os.environ.get("WCA_SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if secret_key is None:
+            secret_key = os.environ.get("WCA_SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         key = _validated_key(secret_key)
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout은 양수여야 합니다.")
         self.download_dir = Path(download_dir if download_dir is not None else os.environ.get("WCA_DOWNLOAD_DIR", "downloads")).expanduser()
         self._transport = _Transport(url.strip().rstrip("/"), key, timeout)
+
+    def _set_secret_key(self, secret_key: str) -> None:
+        self._transport.key = _validated_key(secret_key)
 
     def _rows(self, **params) -> list[dict[str, Any]]:
         rows = self._transport.request("GET", "/rest/v1/team_submissions", params=params)
@@ -222,8 +226,10 @@ class WCA:
                 temporary.unlink(missing_ok=True)
         return {**metadata, "path": target}
 
-    def first(self, download_dir: str | Path | None = None) -> dict[str, Any] | None:
-        """Correctly spelled alias for frist()."""
+    def first(self, secret_key: str | None = None, *, download_dir: str | Path | None = None) -> dict[str, Any] | None:
+        """Download the oldest pending file, optionally changing the admin key."""
+        if secret_key is not None:
+            self._set_secret_key(secret_key)
         return self.frist(download_dir)
 
     def spend(self, name: str, value: str | int | float, *, submission_id: str | None = None) -> dict[str, Any]:

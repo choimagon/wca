@@ -98,6 +98,64 @@ class WCATests(unittest.TestCase):
         client, _ = configured([])
         self.assertIsNone(client.first())
 
+    def test_module_first_accepts_key_without_environment_and_reuses_it(self):
+        old = wca._default
+        opener = ScriptedOpener([], [], [], [row()], [row(result="100")])
+        try:
+            wca._default = None
+            with patch.dict("os.environ", {}, clear=True), patch("wca.client.build_opener", return_value=opener):
+                self.assertIsNone(wca.first(KEY))
+                self.assertEqual(wca.list(), [])
+                self.assertIsNone(wca.frist())
+                self.assertEqual(wca.spend("홍길동", 100)["result"], "100")
+            self.assertTrue(all(req.get_header("Apikey") == KEY for req in opener.requests))
+        finally:
+            wca._default = old
+
+    def test_module_first_preserves_settings_when_changing_key(self):
+        old = wca._default
+        client = WCA(url="https://configured-project.supabase.co", secret_key=KEY, download_dir="received", timeout=47)
+        opener = ScriptedOpener([])
+        client._transport.opener = opener
+        changed_key = KEY + "_changed"
+        try:
+            wca._default = client
+            self.assertIsNone(wca.first(changed_key))
+            self.assertIs(wca._default, client)
+            self.assertEqual(client.download_dir, Path("received"))
+            self.assertEqual(client._transport.timeout, 47)
+            self.assertTrue(opener.requests[0].full_url.startswith("https://configured-project.supabase.co/"))
+            self.assertEqual(opener.requests[0].get_header("Apikey"), changed_key)
+        finally:
+            wca._default = old
+
+    def test_first_key_downloads_to_keyword_directory(self):
+        original = {**row(), "storage_bucket": "team-python-files", "storage_path": f"public/{TOKEN}/{ID}.py"}
+        changed_key = KEY + "_download"
+        with tempfile.TemporaryDirectory() as directory:
+            client, opener = configured([original], b"abc")
+            item = client.first(changed_key, download_dir=directory)
+            self.assertEqual(item["path"].parent, Path(directory).resolve())
+            self.assertEqual(item["path"].read_bytes(), b"abc")
+            self.assertEqual([req.get_header("Apikey") for req in opener.requests], [changed_key, changed_key])
+            self.assertEqual([path.name for path in Path(directory).iterdir()], [ID + ".py"])
+
+    def test_blank_explicit_key_does_not_fall_back_or_change_saved_key(self):
+        client, opener = configured()
+        old = wca._default
+        try:
+            with patch.dict("os.environ", {"WCA_SUPABASE_SECRET_KEY": KEY}):
+                with self.assertRaises(WCAConfigError):
+                    WCA(secret_key="")
+                for default in (None, client):
+                    wca._default = default
+                    with self.assertRaises(WCAConfigError):
+                        wca.first("")
+            self.assertEqual(client._transport.key, KEY)
+            self.assertEqual(opener.requests, [])
+        finally:
+            wca._default = old
+
     def test_frist_checks_download_size_before_creating_files(self):
         record = {**row(size=10), "storage_bucket": "team-python-files", "storage_path": f"public/{TOKEN}/{ID}.py"}
         with tempfile.TemporaryDirectory() as directory:
