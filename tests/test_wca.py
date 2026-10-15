@@ -188,14 +188,51 @@ class WCATests(unittest.TestCase):
         self.assertEqual(json.loads(update.data), {"result": "100"})
         self.assertEqual(update.get_header("Prefer"), "return=representation")
 
-    def test_spend_exact_id_and_reserved_name_characters(self):
-        name = '한, "사람"\\이름'
-        client, opener = configured([row(ID2, name)], [row(ID2, name, "정답")])
-        self.assertEqual(client.spend(name, "정답", submission_id=ID2)["id"], ID2)
-        expected = 'eq."한, \\"사람\\"\\\\이름"'
-        self.assertEqual(params(opener.requests[0])["id"], "eq." + ID2)
-        self.assertEqual(params(opener.requests[0])["team_name"], expected)
-        self.assertEqual(params(opener.requests[1])["team_name"], expected)
+    def test_spend_exact_id_preserves_literal_name_in_scalar_filter(self):
+        names = ['ㅅㄷ', '한, "사람"\\이름', '이름&result=neq.X#?+%()[]:.', '"이름"']
+        for name in names:
+            with self.subTest(name=name):
+                client, opener = configured([row(ID2, name)], [row(ID2, name, "정답")])
+                self.assertEqual(client.spend(name, "정답", submission_id=ID2)["id"], ID2)
+                for request in opener.requests:
+                    query = params(request)
+                    self.assertEqual(query["id"], "eq." + ID2)
+                    self.assertEqual(query["team_name"], "eq." + name)
+                    self.assertEqual(query["result"], "eq.X")
+                    self.assertNotIn("or", query)
+
+    def test_first_then_spend_matches_downloaded_name_and_id(self):
+        pending = {**row(name="ㅅㄷ"), "storage_bucket": "team-python-files", "storage_path": f"public/{TOKEN}/{ID}.py"}
+        saved_result = pending.copy()
+        old = wca._default
+
+        def respond(request, timeout):
+            if "/storage/v1/" in request.full_url:
+                return Response(b"abc")
+            query = params(request)
+            # PostgREST scalar eq compares all characters following eq. literally.
+            matches = all(query.get(field, "eq." + str(saved_result[field])) == "eq." + str(saved_result[field]) for field in ("id", "team_name", "result"))
+            if matches and request.get_method() == "PATCH":
+                saved_result.update(json.loads(request.data))
+            return Response(json.dumps([saved_result] if matches else []).encode())
+
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                client, opener = configured(download_dir=directory)
+                opener.open = respond
+                wca._default = client
+                submission = wca.first(KEY)
+                self.assertEqual(submission["path"].read_bytes(), b"abc")
+                updated = wca.spend(submission["name"], 100, submission_id=submission["id"])
+                self.assertEqual(updated["id"], submission["id"])
+                self.assertEqual(updated["name"], "ㅅㄷ")
+                self.assertEqual(updated["result"], "100")
+                self.assertIsNone(wca.first())
+                with self.assertRaises(WCANotFoundError):
+                    wca.spend(submission["name"], 200, submission_id=submission["id"])
+                self.assertEqual(saved_result["result"], "100")
+        finally:
+            wca._default = old
 
     def test_spend_has_no_pending_row(self):
         client, opener = configured([])

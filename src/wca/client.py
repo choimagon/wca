@@ -96,8 +96,9 @@ def _result(value: str | int | float) -> str:
 
 
 def _name_filter(name: str) -> str:
-    # PostgREST reserved punctuation must be quoted, even after URL encoding.
-    return 'eq."' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    # A scalar eq value is literal text; request() URL-encodes the whole value.
+    # Extra quotes would become part of the name PostgREST compares.
+    return "eq." + name
 
 
 def _metadata(row: dict[str, Any]) -> dict[str, Any]:
@@ -128,7 +129,7 @@ class _Transport:
         url = self.url + path
         if params:
             url += "?" + urlencode(params)
-        headers = {"apikey": self.key, "User-Agent": "WCA/0.2.1", "Accept": "application/octet-stream" if binary else "application/json"}
+        headers = {"apikey": self.key, "User-Agent": "WCA/0.2.2", "Accept": "application/octet-stream" if binary else "application/json"}
         if not self.key.startswith("sb_secret_"):
             headers["Authorization"] = "Bearer " + self.key
         data = None
