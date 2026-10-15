@@ -100,11 +100,15 @@ else:
     print("저장된 결과:", updated["result"])
 ```
 
-다운로드만 해보려면 결과를 수정하지 않는 예제를 실행할 수 있습니다:
+`first()`로 가장 오래된 미처리 파일을 가져오고 이름·다운로드 경로를 출력하려면 환경변수를 설정한 뒤 실행하세요:
 
 ```bash
-python examples/basic.py
+python examples/download_first.py
 ```
+
+이 예제는 `wca.first()`만 호출하고 결과값은 수정하지 않습니다. 미처리 제출이 없으면 안내 문구를 출력하며, 연결·설정·파일 저장 오류는 종료 코드 1로 알립니다.
+
+전체 목록 조회도 포함한 기존 예제는 `python examples/basic.py`로 실행할 수 있습니다.
 
 ### `wca.list()`
 
